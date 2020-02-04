@@ -1,0 +1,178 @@
+508 ps1
+========================================================
+
+> ### Problem 1: Getting to know R
+
+```{r,warning=FALSE,message=FALSE}
+library(foreign) 
+library(sandwich) 
+library(lmtest)
+library(ggplot2)
+library(ggthemes)
+library(gridExtra)
+```
+
+##### 1. Generate a random sample x1, . . . , xn ∼ N (1, 2), where n = 20 using rnorm, and compute the sample mean and sample variance using mean,var.
+```{r, warning=FALSE}
+set.seed(124)
+norm <- rnorm(20,1,sqrt(2))
+cat('The sample mean is',round(mean(norm),3),
+    'The sample variance is',round(var(norm),3))
+```
+
+
+##### 2. Using the previous sample, draw an histogram of the data using the function hist.
+```{r, fig.height=3, fig.width=4,message=FALSE, warning=FALSE}
+hist(norm)
+```
+
+##### 3. Fill the following code to write your own function that computes the sample mean:
+```{r, warning=FALSE}
+my_mean <- function(y) { 
+  L = length(y)
+  m = 0
+  for (i in 1:L) {
+  m = m + y[i]
+  }
+  m = m / L
+return(m) 
+}
+```
+
+
+##### Compute the sample mean as in ii. and compare with the previous result.
+```{r, warning=FALSE}
+cat('my mean function get',round(my_mean(norm),3))
+cat('Is the two values exactly equal?',my_mean(norm)==mean(norm))
+```
+
+
+> ### Problem 2: CEO salaries in the US
+
+##### 1.load the data, head(data) you can see the first few rows of the data set.
+```{r,fig.height=2, fig.width=15,message=FALSE,  warning=FALSE}
+load("ceosal2.Rdata")
+grid.arrange(tableGrob(head(data)))
+```
+
+##### 2.Find the average salary and the average tenure in the company and as CEO in the sample.
+
+```{r, warning=FALSE}
+cat('Mean of salary is',round(mean(data$salary),2))
+cat('Mean of company tenure is',round(mean(data$comten),2))
+cat('Mean of CEO tenure is',round(mean(data$ceoten),2))
+```
+
+##### 3.Fill the following code to regress salary on comten:
+```{r, warning=FALSE}
+y=data$salary
+x=data$comten
+lm1<-lm(y~x)
+summary(lm1)
+```
+
+##### 4.What is the (approximate) predicted increase in salary given one more year in the company?
+```{r, warning=FALSE}
+new <- data.frame(x=0.1)
+intv<-round(predict(lm1, new, interval = "confidence"),2)
+cat('Predicted value is ',intv[1],
+    'Confidence interval is (',intv[2],',',intv[3],')')
+```
+
+
+##### 5.Fill the following code to plot salary (y-axis) against comten (x-axis):
+```{r, fig.height=3, fig.width=5,message=FALSE, warning=FALSE}
+ggplot(aes(x=comten,y=salary),data=data)+
+  geom_point(color="royalblue",size=1.5,alpha=0.5)+
+  xlab('tenure')+ylab('salary')+
+  ggtitle('Relationship of Salary & Company Tenure')
+```
+
+##### 6.Discuss the OLS assumptions given your results so far. 
+- Given the result, I guess the OLS might not have a significant correlationship.
+
+
+##### Should you be concerned about the validity of your estimates?
+- Yes, there is a outlier which will effect the whole estimation.
+
+##### 7.What is the largest salary in the sample? (Hint: there is a max function) Fill the following code to create a new dataset which consists of observations strictly smaller than this value
+```{r, warning=FALSE}
+data_sub = subset(data, salary < max(data$salary))
+cat('Max value is',max(data$salary))
+```
+
+##### 8.Now plot salary (y-axis) against comten (x-axis) for this subset observations. 
+```{r,fig.height=3, fig.width=5, warning=FALSE}
+ggplot(aes(x=comten,y=salary),
+           data=data_sub)+
+  geom_point(color="salmon",size=1.5,alpha=0.6)+
+  stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(method='lm', formula= y~x)+
+  xlab('tenure')+ylab('salary')+
+  ggtitle('Relationship of Salary & Company Tenure (subset)')
+```
+
+##### Revisit your answer in 6. in light of this.
+- the two varibles still don`t have significant linear relationship.
+- without outlier, the data looks better.
+
+
+##### 9.Regress salary on comten for this subset of observations.
+```{r, warning=FALSE}
+lm2<-lm(data_sub$salary~data_sub$comten)
+summary(lm2)
+```
+
+##### What do you find? Does this make sense?
+
+- the subst dataset performs better than the original datset.
+- the slitghly positive relationship becomes slightly negtive.
+- the correletion is not sigificent, it is not obvious that longer tenure coincide with higher salary.
+perhaps because of sample selection bias. But at least in some range, the two variables have positive relationship.
+
+
+##### 10.Regress salary on ceoten for the full and smaller dataset. 
+
+```{r, warning=FALSE}
+lm3<-lm(data$salary~data$ceoten)
+summary(lm3)
+```
+
+```{r, warning=FALSE}
+a<-data_sub$salary
+b<-data_sub$ceoten
+lm4<-lm(a~b)
+summary(lm4)
+```
+##### What is the (approximate) predicted increase in salary given one more year as CEO? 
+
+```{r, warning=FALSE}
+new <- data.frame(x=0.1)
+intv<-round(predict(lm4, new, interval = "confidence"),2)
+cat('Predicted value is ',intv[1],
+    'Confidence interval is (',intv[2],',',intv[3],')')
+```
+
+##### Plot salary against ceoten, comment.
+```{r, fig.height=6, fig.width=6, warning=FALSE}
+p1<-ggplot(aes(x=ceoten,y=salary),data=data)+
+  geom_point(color="hotpink",size=1.5,alpha=0.6)+
+  xlab('ceo tenure')+ylab('salary')+
+  ggtitle('Relationship of Salary & CEO tenure')
+
+p2<-ggplot(aes(x=ceoten,y=salary),data=data_sub)+
+  geom_point(color="purple",size=1.5,alpha=0.5)+
+  stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(method='lm', formula= y~x)+
+  xlab('ceo tenure')+ylab('salary')+
+  ggtitle('Relationship of Salary (removed outlier) & CEO tenure')
+
+grid.arrange(p1,p2)
+```
+
+##### Do the results make sense?
+
+- The relationship between CEO`tenure and salary is clearly more significant.
+- I think the resualts make sense:
+> Perhaps, CEO need to perform pretty well, they have responsible to promote the growth of companies. So their tenure usually indicates they are able to improve companies` revenue, as well as their salary. However, ordinary employees do not need to perform very well, they just need to finish their task, in other words, their tenure is not correlated with their ability, their salary.
+
