@@ -1,0 +1,172 @@
+508 ps5
+========================================================
+- yubin ye
+- U53631145
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
+library(foreign) 
+library(sandwich) 
+library(lmtest)
+library(robust)
+library(readstata13)
+library(ivpack)
+library(zoo)
+library(haven)
+```
+
+### Problem 1: Labour Supply
+The data set in fertility.dta contains the data for 254,654 married mothers (i.e. with at least one child) aged 21-35 from the 1980 US census including 
+
+```{r}
+ft<-read.dta13("/Users/yubinye/Downloads/508/p5/fertility.dta")
+```
+
+
+##### 1.We are interested in the effect of having children on labour supply, using OLS estimate the following regression:
+weeksm1i = β0+β1×morekidsi+β2×agem1i+β3×blacki+β4×hispani+β5×othracei+error
+
+report the estimates, vcovHC robust standard errors and a 95% confidence interval for β1. 
+
+```{r}
+lm1<-lm(weeksm1~morekids+agem1+black+hispan+othrace, data = ft)
+
+coeftest(lm1, vcov. = vcovHC)
+
+se_b1<-sqrt(vcovHC(lm1)[2,2])
+CI_b1 <- lm1$coef[2] + 1.96*se_b1*c(-1,1)
+
+cat('95% CI of b1 is (',round(CI_b1,2),')')
+```
+##### Is the effect of having more than 2 children significant on labour supply? 
+- yes, coeficient of morekid has t-statistic > 1.96
+
+##### Is it large in magnitude? (Hint: look at the average and the median of weeksm1)
+
+```{r}
+mean(ft$weeksm1)
+median(ft$weeksm1)
+```
+
+- yes, one unit of increase in morekids, coinciding with 6.2 unit decrease in labor supply, which is even bigger than median labor supply.
+
+#####  2.In the previous regression: should you be concerned about multicollinearity? 
+```{r}
+reg <- cbind(ft$morekids, ft$agem1, ft$black, ft$hispan,ft$otherace)
+cor(reg, use = "complete.obs")
+```
+
+- no. there is only slight corraletion between weeksm1 and morekids.
+- perhaps mother might not able to work more if she has more kids. but it is too smaller to be account as multicollinearity.
+
+##### Should you be concerned about endogeneity?
+- yes. it omitted variables such as father`s income, if father has more income, the mother might want to have more kids, and more income leads mother work less.
+
+##### 3. Angrist and Evans (1998) suggest to use samesex as an instrument for morekids. Discuss the relevance and the exogeneity of the instrument.
+relevance: if family previously have same sex children, the incentive to have different sex might lead they give birth to more kids.
+exogenous: if error term is father`s income,for example, it is uncorrelated with whether kids have same sex.
+
+##### 4.Using samesex as an instrument, estimate the following regression:
+weeksm1i = β0+β1×morekidsi+β2×agem1i+β3×blacki+β4×hispani+β5×othracei+error
+
+report the estimates, vcovHC robust standard errors and a 95% confidence interval for β1. 
+
+```{r}
+tsls1<-ivreg(weeksm1~morekids+agem1+black+hispan+othrace,~agem1+black+hispan+othrace+samesex,data=ft)
+coeftest(tsls1)
+
+X = cbind(1,ft$morekids,ft$agem1,ft$black,ft$hispan,ft$othrace)
+Z = cbind(1,ft$samesex,ft$agem1,ft$black,ft$hispan,ft$othrace)
+
+resid = tsls1$residuals
+eZ = kronecker(resid,matrix(1,1,dim(Z)[2]))*Z
+n = dim(Z)[1]
+
+SigHeter = solve(t(Z)%*%X/n,var(eZ))%*%solve(t(X)%*%Z/n)
+SigHomo = solve(t(Z)%*%X/n,var(resid)*t(Z)%*%Z/n)%*%solve(t(X)%*%Z/n)
+
+iv_se = sqrt(diag(SigHeter)/n)
+results = cbind(tsls1$coefficients, iv_se)
+
+CI<-tsls1$coefficients[2]+1.96*iv_se[2]*c(-1,1)
+cat('The 95% CI is','(',round(CI,2),')')
+
+```
+
+##### Is the effect of having more than 2 children significant on labour supply? 
+
+- yes, coeficient of morekid has t-statistic > 1.96
+
+##### Is it large in magnitude? (Hint: look at the average and the median of weeksm1)
+
+- yes,- one unit of increase in morekids, coinciding with 5.8 unit decrease in labor supply, but smaller than before.
+
+##### 5. Run the first-stage regression and report the first-stage F-statistic.
+```{r  warning=FALSE}
+first_stage <- lm(morekids~samesex+agem1+black+hispan+othrace, data = ft)
+
+
+coef = first_stage$coef
+V = vcovHC(first_stage)
+R = rbind(c(0,1,0,0,0,0))
+
+# Compute the first-stage F-statistic
+F = t( R%*%coef ) %*% solve( R%*%V%*%t(R), R%*%coef )/1
+
+# It's less than 10....
+print(round(F,2))
+```
+
+##### should you be concerned about weak instruments?
+
+- no, the F-value is larger than 10
+
+### Problem 2: Wages
+The data set in cps12.dta contains the data from the 2012 census on ahe, average hourly earnings in dollars per hour, age, female, bachelor, =1 if the person has a bachelor’s degree.
+
+##### 1. Load the cps12 data using read_dta in the packages haven instead of the usual read.dta in the foreign package (this is a stata file from a newer version of stata)
+
+```{r}
+cps<-read.dta13("/Users/yubinye/Downloads/508/p5/cps12.dta")
+```
+
+##### 2.Using OLS, estimate the following regression model:
+log(AHE)i =β0 +β1 ×agei +β2 ×age2i +β3 ×femalei +β4 ×bachelori
+report the estimates and vcovHC robust standard errors. Is the effect of age non-linear? 
+
+(Be careful the vcovHC standard errors are very different from the standard homoskedastic only standard errors).
+
+```{r}
+
+cps$lahe<-log(cps$ahe)
+cps$age2<-(cps$age)^2
+lm2<-lm(lahe~age+age2+female+cps$bachelor,data=cps)
+
+coeftest(lm2, vcov. = vcovHC)
+
+se_b1<-sqrt(vcovHC(lm2)[2,2])
+CI_b1 <- lm2$coef[2] + 1.96*se_b1*c(-1,1)
+
+cat('se_b1 is',round(se_b1,2),
+    '\n95% CI of b1 is (',round(CI_b1,2),')')
+```
+
+- there is a point in front of age^2 shows non-linear.
+
+
+##### 3.Is the marginal effect of age on wages increasing, decreasing or constant? Is that statistically significant? (Hint: it’s all about one coefficient)
+
+- the coefficient in front of age is about 0.104, which is positive.
+- if conficence interval is 95%, t= 2.27 > 1.96, it is significant; but, if CI is 99%, t< 2.57 it is not significant.
+
+
+##### 4. At which age is the predicted salary at it’s maximum? Discuss. (Hint: wage is quadratic in age so the maximum can be computed in terms of β1 and β2. Before you discuss, you should compute the minimum, average and maximum age in the sample).
+$$ \because Y=aX^2+bX+c\\Y=(X-\frac{b}{2a})^2+c+\frac{b^2}{4a}\\\therefore X=\frac{b}{2a}$$
+
+
+```{r}
+b2a <- lm2$coefficients[2]/(2*lm2$coefficients[3])
+
+summary(cps$age)
+cat('\n The age* of maximum salary is',b2a)
+```
+- The age* of maximum salary is beyond the range of age variables, thus the age value should be 34.

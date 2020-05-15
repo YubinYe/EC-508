@@ -1,0 +1,161 @@
+508 ps6
+========================================================
+- yubin ye
+- U53631145
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
+library(foreign) 
+library(sandwich) 
+library(lmtest)
+library(broom)
+library(readstata13)
+library(sampleSelection)
+
+ep<-read.dta13("/Users/yubinye/Downloads/508/p6/employment_08_09.dta")
+```
+
+### Problem 1: Labour Supply
+The data set Employment_08_09 contains individual level on employed, whether the person was employed full time in 2009, age, female, married, race (= 1 if self-identified race = white, = 2 if self-identified race = black, = 3 (=1 if race=3, 0 otherwise
+
+##### 1.Using a Linear Probability Model, regress employed on age, age2, female, married, female × married and race.
+
+Hint: to regress on race, create a variable data\$racef=factor(data$race) and simply add racef
+to the regression. It will add two regressors racef2 (=1 if race=2, 0 otherwise) and racef3
+
+```{r}
+ep$age2 <- ep$age^2
+ep$racef <- factor(ep$race)
+ep$marr_f <- ep$married*ep$female
+
+lm1 <- lm(employed ~ age+age2+female+married+marr_f+racef, data = ep)
+coeftest(lm1, vcov=vcovHC)
+```
+
+
+##### 2.Based on the estimates and appropriate standard errors determine, whether the following have a significant effect on employment: age, gender, marital status and race. 
+
+`according to the regression results, age, marital status, marital status* female, and race2 all have significant effect, while gender(female)  and race3 does not have significant effect, because t<1.96`
+
+##### Is the effect of marital status different across genders?
+
+`yes, the coefficient of married variable is 3.76, the coefficient for married*female is -6.29, which has opposite sign. it means, the effect of marital status is different between female and male` 
+
+##### 3.Repeat the previous exercise with a Probit model.
+```{r}
+probit <- glm(employed ~ age+age2+female+married+marr_f+racef, family = binomial(link = "probit"),
+              data = ep)
+coeftest(probit,vcov=vcovHC)
+```
+
+
+##### 4.Repeat the previous exercise with a Logit model.
+
+```{r}
+logit <- glm(employed ~ age+age2+female+married+marr_f+racef, family="binomial",data = ep)
+coeftest(logit,vcov=vcovHC)
+```
+
+##### 5.Are there important differences in your answers in 2-4.? Explain
+
+`both 3 and 4 have smaller absolute value of coefficient than 2, because 3 and 4 estimate the probability, which is always between 0 and 1. and we cannot use ols regression to estimate binary dependent variables`
+
+##### 6.For the Logit model, compute the odds ratio of being employed for an unmarried women compared to an unmarried man. 
+
+Hint: recall that the odds ratio in the Logit model can be computed using exp(β1∆x1 + · · · + βk∆xk). Here think carefully about ∆xj for each regressor j = 1, . . . , k.
+
+```{r}
+odds1 <- exp(logit$coefficients[4])
+uw <- exp(logit$coefficients[4])#female/male
+um <- exp(0)#male/male
+odds1
+```
+
+##### Compare with the odds ratio for married women vs. married men
+
+```{r}
+#female/male, mr_fe/(un_mr_ml + un_mr_fe + mr_ml)
+odds2 <- exp(logit$coefficients[4] + logit$coefficients[6])
+
+#female/male, married/unmarried, married female/(1-married female)
+mw <- exp(logit$coefficients[4] +logit$coefficients[5] + logit$coefficients[6])
+mm <- exp(logit$coefficients[5])#male,
+odds2
+
+```
+
+
+##### 7.Repeat the previous question but comparing black married women to white married men.
+
+```{r}
+odds3 <- exp(logit$coefficients[4] + logit$coefficients[6] + logit$coefficients[7])#female,married female,race2
+bmw <- exp(logit$coefficients[4] + logit$coefficients[5] + logit$coefficients[6] +
+             logit$coefficients[7]) ##female,married,married female,race2
+wmm <- exp(logit$coefficients[5])
+odds3
+```
+
+
+##### 8.At which age does the probability of being employed begins to decline? 
+Compare your estimate across specifications. Discuss by looking at the range of age in your dataset. 
+Hint: you can use the min and max functions to find the range of age in the data; you can also use the quantile function to see how many observations are above, below a certain threshold.
+
+```{r}
+maxage_lm <- -lm1$coefficients[2]/(2*lm1$coefficients[3])
+maxage_pb <- -probit$coefficients[2]/(2*probit$coefficients[3])
+maxage_lg <- -logit$coefficients[2]/(2*logit$coefficients[3])
+maxage <- cbind(maxage_lm, maxage_pb,maxage_lg)
+maxage
+summary(ep$age)
+```
+
+`maximum age of being employed is about 43 years old, then the employment will begin to fall`
+
+##### 9.Repeat iv, vi, vii and viii for the logit model on the Employment_06_07 dataset. 
+```{r}
+em<-read.dta13("/Users/yubinye/Downloads/508/p6/employment_06_07.dta")
+
+em$age2 <- em$age^2
+em$racef <- factor(em$race)
+em$marr_f <- em$married*em$female
+
+lg <- glm(employed ~ age+age2+female+married+marr_f+racef, family="binomial",data = em)
+coeftest(lg,vcov=vcovHC)
+
+```
+
+
+```{r}
+od1 <- exp(lg$coefficients[4])
+od1
+od2 <- exp(lg$coefficients[4] + lg$coefficients[6])
+od2
+od3 <- exp(lg$coefficients[4] + lg$coefficients[6] + lg$coefficients[7])
+od3
+
+```
+
+```{r}
+age_lg <- -lg$coefficients[2]/(2*lg$coefficients[3])
+age_lg
+summary(em$age)
+```
+
+##### Using this information discuss how the business cycle affects the probability of being (un)employed conditionally (on gender, race, age, marital status) and unconditionally (overall).
+
+- unconditionally 
+
+
+```{r}
+maxage_1 <- -logit$coefficients[2]/(2*logit$coefficients[3]) 
+cbind(mean(ep$employed), mean(em$employed))
+```
+
+`the employment ratio is increasing in the next business cycle`
+
+- conditionally
+
+`comparing to logit regression for 0809 file, the 0607 file has similar coefficient for age, marital status, marital status* female, and race2 , while coefficient for gender(female) has opposite sign, it is positive in 0607 file, and negetive in 0809 file `
+
+`the odds ratios for married female and female are increasing from 0607 to 0809, it might indicate that women and married women have higher social status in the next business cycle.`
+
+`The maximum age in 0607 is 42.5, which is slightly samller than 0809, it might indicate that large group of people are stilled being employed, business cycle does not have much effect on employment`

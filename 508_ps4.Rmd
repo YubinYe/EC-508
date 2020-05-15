@@ -1,0 +1,201 @@
+508 ps4
+========================================================
+- yubin ye
+- U53631145
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
+library(foreign) 
+library(sandwich) 
+library(lmtest)
+library(robust)
+library(readstata13)
+library(ivpack)
+```
+
+### Problem 1: Market Efficiency
+
+The data set in Return.dta contains return, the total value from holding a firm’s stock over the 4 years between 1990-1994. In 1990, we have the following information: 
+- dkr (debt-to-capital ratio), eps (earnings per share), netinc (net income) and salary (CEO’s salary).
+
+
+##### 1.set y = return and X = (1, dkr, eps, netinc, salary),compute the OLS estimator βˆ using the matrix OLS formula. $$β=(X`X)^{-1}X`y$$
+```{r}
+rt<-read.dta13("/Users/yubinye/Downloads/508/p4/RETURN.DTA")
+
+Y = rt$return
+X = cbind(1,rt$dkr,rt$eps,rt$netinc,rt$salary)
+
+
+b_ols <- solve( t(X)%*%X, t(X)%*%Y )
+b_ols
+```
+
+
+#####  2.  compute uˆ = y − Xβ. The following computes vˆ = uˆ x.
+
+```{r}
+u_hat = Y-X%*%b_ols 
+resid = kronecker(u_hat,matrix(1,1,dim(X)[2]))
+
+v_hat = resid*X 
+head(v_hat)
+```
+
+##### 3. Now compute ΣX = (X′X/n) and Σ = Σ−1ΣvΣ−1/n using
+```{r}
+n = length(Y) 
+sigma_v = var(v_hat) 
+sigma_x = t(X)%*%X/n
+#sigma_hat= solve(sigma_x,sigma_v %*% sigma_x)
+sigma_hat= solve(sigma_x) %*% sigma_v %*% solve(sigma_x)/n
+sigma_hat
+```
+
+##### 4. Compute the standard errors using:
+```{r}
+sqrt(diag(sigma_hat))
+```
+
+
+##### 5. Report the OLS estimates, standard errors, R and adjusted-R .
+
+```{r  warning=FALSE}
+lm1<-lm(return~dkr+eps+netinc+salary,data=rt)
+
+coeftest(lm1, vcov. = vcovHC)
+
+summary(lm1)$r.squared
+summary(lm1)$adj.r.squared
+```
+
+
+##### 6. Compute the Wald statistic to test the null hypothesis that H0 :β1 =β2 =β3 =β4 =0
+
+```{r}
+# Wald test 
+R = rbind( c(0,1,0,0,0), 
+           c(0,0,1,0,0),
+           c(0,0,0,1,0),
+           c(0,0,0,0,1) )
+c = c(0,0,0,0)
+
+coef = lm1$coef
+w = t(R%*%coef-c)  %*%  solve(R%*%sigma_hat%*%t(R))  %*%  (R%*%coef-c)
+print(w)
+
+```
+
+
+##### 7. How many degrees of freedom should the limiting distribution have? 
+- 4
+##### Use the Wald statistic to test H0 at the 95% confidence level.
+
+```{r}
+print(qchisq(0.95,4))
+```
+
+
+##### 8. Given your answers in v. and vii. discuss the predictability of stock market returns.
+#####  Conclude on whether the market efficiently uses this information in valuing stocks.
+
+- w > c1−α, we can reject H0 at the 95% confidence level.
+
+### Problem 2: Returns to Education
+The data set in wage2.dta contains the data for 935 women in the labour force including lwage, the logarithm of monthly earnings, educ, years of education, exper, years of work experience, age in years, meduc, mother’s education and feduc father’s education, sibs number of siblings and IQ measures IQ.
+```{r}
+wg<-read.dta13("/Users/yubinye/Downloads/508/p4/wage2.dta")
+```
+
+
+##### 1. Using OLS estimate the following regression mode 
+$$lwagei =β_0 +β_1 ×educi +β_2 ×experi +β_3 ×agei +β_4 ×age^2i +_β5 ×IQi +error$$ 
+report the estimates, vcovHC `robust` standard errors and a 95% confidence interval for β1.
+
+```{r}
+wg$age2<-(wg$age)^2
+lm2<-lm(lwage~educ+exper+age+age2+IQ,data=wg)
+
+coeftest(lm2, vcov. = vcovHC)
+
+
+se_b1<-sqrt(vcovHC(lm2)[2,2])
+CI_b1 <- lm2$coef[2] + 1.96*se_b1*c(-1,1)
+
+cat('se_b1 is',round(se_b1,2),
+    '\n95% CI of b1 is (',round(CI_b1,2),')')
+```
+
+##### 2.What is the effect of doing a 2-year master’s degree program on expected wages? Report a 95% confidence interval and discuss the magnitude of the effect. As a reference, wages in US grew around 4% per annum in the past 5 years. Don’t forget to think about the cost!
+Hint: 100 × β1 can be interpreted as the expected increase in wages (in %) when education increases by 1 year.
+```{r}
+
+CI <- 200*CI_b1
+ols_efc<-lm2$coefficients[2]*200
+cat('The effect is (',round(ols_efc,2),') in %',
+    '\nThe expected wage difference is', '(',round(CI,2),') in %')
+```
+- the magnitude of the effect is bigger than 4%
+
+##### 3.Labour economists suggest using meduc and feduc as instruments for educ. Discuss the relevance of the instrument and the exogeneity of the instrument.
+
+- mother’s education and father’s education are releated with education, so they have relevance.
+- the medcu and feduc are not directely effect wage, so they might have exogeneity.
+
+
+##### 4. Using ivreg, estimate the previous regression model but with meduc and feduc as instruments for educ. 
+Report 
+- the estimates
+- 95% confidence interval for β1
+- the effect of a 2-year program
+- the 95% confidence interval. 
+Don’t forget to use robust vcovHC standard errors. Compare with your OLS based estimates and answers.
+
+```{r}
+tsls = ivreg(lwage~educ+exper+age+age2+IQ,~ meduc+feduc+exper+age+age2+IQ,data=wg)
+coeftest(tsls,vcov. = vcovHC)
+tslsrobse<-sqrt(vcovHC(tsls)[2,2])
+CI_t<-tsls$coefficients[2]+1.96*tslsrobse*c(-1,1)
+cat('The 95% CI is','(',round(CI_t,2),')')
+```
+
+```{r}
+
+tsls_efc<-tsls$coefficients[2]*200
+CI_t_2<-CI_t*200
+
+cat('The effect is (',round(tsls_efc,2),') in %',
+    '\nThe expected wage difference is', '(',round(CI_t_2,2),') in %')
+
+```
+
+- compare to OLS that the effect is ( 10.09 ) in % , the expected wage difference is ( 6.95 13.24 ) in %, the TSLS estimated effect is bigger.
+
+
+##### 5.You’d like to compute a J-statistic for exogeneity but a friend tells you that because of endogamy you really only have one instrument rather than two. Explain what he means and what the concern is. Compute the correlation between meduc and feduc and discuss whether there should be such concern or not.
+
+- mother’s education and father’s education might be correleted, people always choose spouse who has similar ecuation background.
+
+```{r}
+mf<-lm(wg$meduc~wg$feduc)
+coeftest(mf,vcov. = vcovHC)
+```
+- yes the two variables are correleted. mother’s education and father’s education have about 50% coincidence.
+
+##### 6. Repeat iv. with meduc and siblings as instruments
+```{r}
+tsls2= ivreg(lwage~educ+exper+age+age2+IQ,~ meduc+sibs+exper+age+age2+IQ,data=wg)
+coeftest(tsls2,vcov. = vcovHC)
+
+tslsrobse2<-sqrt(vcovHC(tsls2)[2,2])
+CI_t2<-tsls2$coefficients[2]+1.96*tslsrobse2*c(-1,1)
+cat('The 95% CI is','(',round(CI_t2,2),')')
+```
+```{r}
+tsls_efc2<-tsls2$coefficients[2]*200
+CI_t2_2<-CI_t2*200
+
+cat('The effect is (',round(tsls_efc,2),') in %',
+    '\nThe expected wage difference is', '(',round(CI_t2_2,2),') in %')
+
+```
+

@@ -1,0 +1,140 @@
+508 ps3
+========================================================
+
+### Problem 1: The CEO’s Move
+
+The data set in ceosal2.RData contains information on chief executive officers for U.S. corpora- tions. The variable salary is annual compensation (1990 compensation in $1,000s), comten is prior number of years working for the company and ceoten is prior number of years as company CEO,
+
+##### 1.From Blackboard download the ceosal2.RData file. In R-studio, set the working directory to the file’s location:1 and then type
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
+library(foreign) 
+library(sandwich) 
+library(lmtest)
+library(robust)
+```
+
+##### to load the data. The dataset is now loaded into R as a dataframe called data.head(data) you can see the first few rows of the data set.
+```{r}
+load("ceosal3.Rdata")
+```
+
+#####  2. Construct datasub which is the subset of the data where salaryi ≤ 4, 000.
+```{r}
+df=subset(data,data$salary<=4000)
+```
+
+##### 3. Regress salary on comten and ceoten, report the estimates and 95% confidence intervals.
+```{r}
+lm1<-lm(df$salary~df$comten+df$ceoten)
+coeftest(lm1, vcov. = vcovHC)
+se_com <-sqrt(vcovHC(lm1)[2,2]) 
+se_ceo <-sqrt(vcovHC(lm1)[3,3])
+
+CI_com <- lm1$coef[2] + 1.96*se_com*c(-1,1)
+CI_ceo <- lm1$coef[3] + 1.96*se_ceo*c(-1,1)
+
+cat('se(comten) is',round(se_com,2),
+    '\nse(ceoten) is',round(se_ceo,2),
+    '\n95% CI of comten is (',round(CI_com,2),')',
+    '\n95% CI of ceoten is (',round(CI_ceo,2),')')
+```
+
+##### 4. Elon has been at the company for 10 years, he became CEO last year. He was just offered to become CEO of another company. If he accepts the offer now, what is the expected difference in salary he would get next year when he has one year of experience in this company vs. 2 years as CEO in his old company.
+```{r}
+s1_old<-lm1$coefficients[2]*11+lm1$coefficients[3]*2
+s1_new<-lm1$coefficients[2]*1+lm1$coefficients[3]*1
+
+dif1<-s1_new-s1_old
+cat('the expected difference is',dif1)
+```
+
+
+##### 5. Regress salary on comten, ceoten and profits report the estimates and 95% confidence inter- vals.
+
+```{r  warning=FALSE}
+lm2<-lm(df$salary~df$comten+df$ceoten+df$profits)
+
+coeftest(lm2, vcov. = vcovHC)
+
+se_com <-sqrt(vcovHC(lm2)[2,2]) 
+se_ceo <-sqrt(vcovHC(lm2)[3,3])
+se_pf<-sqrt(vcovHC(lm2)[4,4]) 
+
+CI_com <- lm2$coef[2] + 1.96*se_com*c(-1,1)
+CI_ceo <- lm2$coef[3] + 1.96*se_ceo*c(-1,1)
+CI_pf <- lm2$coef[4] + 1.96*se_pf*c(-1,1)
+
+cat('se(comten) is',round(se_com,2),
+    '\nse(ceoten) is',round(se_ceo,2),
+    '\nse(profit) is',round(se_ceo,2),
+    '\n95% CI of comten is (',round(CI_com,2),')',
+    '\n95% CI of ceoten is (',round(CI_ceo,2),')',
+    '\n95% CI of profit is (',round(CI_pf,2),')')
+```
+
+##### 6. Next year, profits are expected to decline by 1 million dollars - what is the expected increase/decrease in salary compared to this year? Would your answer be different if the decline was in two years?
+
+```{r}
+dif_p1<-lm2$coefficients[4]*1
+dif_p2<-lm2$coefficients[4]*2
+
+cat('the expected increase in one year is',dif_p1,
+    '\nthe expected increase in two year is',dif_p2)
+```
+
+##### 7. You will compute the OLS estimator without the lm function. We will only use the data with salary ≤ 4, 000 in all of the following. First, construct the y vector and X matrix using:
+
+```{r}
+y = df$salary
+X = cbind(1,df$comten ,df$ceoten ,df$profits)
+```
+
+##### Now compute the OLS estimates using the formula:
+$$β=(X`X)^{-1}X`y$$
+You will write your own code relying only on y and X above. Compare with the output of the lm function in vii.You will write your own code relying only on y and X above. Compare with the output of the lm function in vii.
+##### A few hints: take A to be a matrix in R. The transpose A′ of A can be computed using t(A). For two matrices A, B in R, the product AB can be computed using A%∗%B. Finally, the inverse of a square matrix A can be computed using solve(A) and the system Ax = b can be solved (in x) using solve(A,b) which computes A−1b.
+
+```{r}
+x1<-t(X)
+XX<-x1%*%X
+Xy<-x1%*%y
+solve(XX,Xy)
+```
+
+##### ix. Compare your OLS estimates with lmRob estimates based on the robust package. 
+
+```{r}
+lm3<-lmRob(df$salary~df$comten+df$ceoten+df$profits)
+summary(lm3)
+```
+
+##### Discuss the results: are there any outliers in the data? Does it affect your conclusions?
+- yes, there are outlier, the coefficients are different, so it affect my conclusion.
+
+### Problem 2: Sleep and the Allocation of Time
+The following model is a simplified version of the multiple regression model used by Biddle and Hamermesh (1990)3 to study the tradeoff between time spent sleeping and working and to look at other factors affecting sleep:
+$$sleepi = β_{0} + β_{1}totwrki + β_{2}educi + β_{3}agei + ui$$
+where sleep and totwrk (total work) are measured in minutes per week and educ and age are measured in years.
+##### i. If adults trade off sleep for work, what is the sign of β1?
+- negetive
+##### ii. What signs do you think β2 and β3 will have?
+- Sign of β2 might be negetive, because study costs time, therefore sleep time will reduce;
+- Sign of β3 might be positive, because the young people always stay up late,while older people don\`t.
+
+##### iii. The estimated equation is
+$$sleep = 3638.25 − .148 × totwrk − 11.13 × educ + 2.20 × age$$
+n = 706. If someone works five more hours per week, by how many minutes is sleep predicted to fall? Is this a large tradeoff?
+
+```{r}
+5*(-0.148)*60
+```
+- I don`t think this is a large trade off, because people 
+
+##### iv. Discuss the sign and magnitude of the estimated coefficient on educ.
+- the negetive sign indicates that higher educated people sleep less
+- the magnitude implies that older people are more likely have enough sleep
+
+##### v. What other factors might affect the time spent sleeping? Are these likely to be correlated with totwrk?
+- "entertainment", it correlated with total work, more entertainment usually coincide with less total work.
+- "commuting time", it might correlated with work, more commuting time, less work.

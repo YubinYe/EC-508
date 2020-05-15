@@ -1,0 +1,147 @@
+508 ps7
+========================================================
+- yubin ye
+- U53631145
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
+rm(list=ls())
+library(foreign)
+library(zoo)
+library(sandwich)
+library(lmtest)
+library(dynlm)
+library(Metrics)
+library(ggplot2)
+library(dotwhisker)
+library(broom)
+library(dplyr)
+```
+
+
+question ii. I re-uploaded the questions on blackboard. Some clarification: for an ADL(0,q) you will regress unemployment changes only on current claims (and past claims if p>1). For q=1, you should also include past unemployment changes as per the snippet of code attached p1.
+
+You can also (optional) rescale the coefficients by dividing claims by 100,000 so that the coefficients are per 100,000 claimants. Finally, remember for question 2 that current unemployment is equal to past unemployment plus the change in unemployment.
+
+```{r}
+load("Claims.RData")
+
+head(data,1)
+tail(data,1)
+```
+
+### i. Initial claims number measure how many individuals filed for unemployment in a given week/month, while unemployment numbers measures the total numbers who are unemployed at a given point in time. We will thus try to predict changes in unemployment using the claims number rather than the level of unemployment itself. 
+
+```{r}
+ts_unep <- ts(data$Unempl, start = 1990, frequency = 12)
+ts_claims<- ts(data$Claims, start = 1990, frequency = 12)
+
+plot(ts_unep)
+plot(ts_claims)
+```
+
+##### Explain why this is a good strategy using the notion of flow and stock variables from macroeconomics?
+
+`view the change to see the time-fixed effect, different stock data might vary by unobserved heterogeniety factors such as city, income,family, they could be mitigated by taking first-differences.`
+
+### We will consider ADL models of the form:
+∆Ut =β0 +β1∆Ut−1 +···+βp∆Ut−p +δ1Xt +···+δqXt−q+1 +et,
+
+where ∆Ut = Ut − Ut−1 is the change in the unemployment rate from t − 1 to t and Xt are the jobless claims. Estimate the ADL(p,q) model with p = 0 and q = 1, 2, 3 as well as p = 1 and q = 1, 2, 3. Report the OLS estimates.
+
+Hint: to estimate the ADL model described above, you can use the following command from the dynlm package: dynlm( diff(Unempl)~ L(diff(Unempl),1:p)+ L(Claims,0:(q-1)), data
+= data )
+
+```{r}
+dl0 <- dynlm(diff(Unempl)~L(Claims,0:2),data=data)
+summary(dl0)
+
+dl1 <- dynlm(diff(Unempl)~L(diff(Unempl),1)+L(Claims, 0:3),data=data)
+summary(dl1)  
+
+```
+
+### iii. Using the window command, create two subsets of data. The first consists of observations from January 1990 to December 2005 and the second will consist of observations from January 2006 to March 2020. To create the first subset, you could use data1 = window(data,start = "Jan 1990", end = "Dec 2005").
+
+```{r}
+data1 = window(data, start = "Jan 1990", end = "Dec 2005")
+data2 = window(data, start = "Jan 2006", end = "Mar 2020")
+
+unemp1 <- ts(data1$Unempl, start = 1990, frequency = 12)
+claims1 <- ts(data1$Claims, start = 1990, frequency = 12)
+```
+
+##### Estimate the regression models in ii. on the first subset of data and compute the forecasted values on the second subset. The forecasts are computed manually using forecast1 = model1 $coef[1] + model1$coef[2]*lag(data2$Claims,0) for an ADL(0,1) model for instance.
+
+
+##### (1) p=0
+```{r}
+model0<- dynlm(diff(unemp1)~L(claims1,0:0), data=data1)
+forecast0 <- model0$coef[1]
+error0 <- rmse(diff(data2$Unempl), forecast0)
+
+model01<- dynlm(diff(unemp1)~L(claims1, 0:1), data=data1)
+forecast01 <- model01$coef[1]+model01$coef[2]*lag(data2$Claims,0)
+error01 <- rmse(diff(data2$Unempl), forecast01)
+           
+model02<- dynlm(diff(unemp1)~L(claims1, 0:2), data = data1)
+
+forecast02<- model02$coeff[1]+model02$coef[2]*lag(data2$Claims,0)+
+  model02$coef[3]*lag(data2$Claims,1)
+
+error02 <- rmse(diff(data2$Unempl[c(-1)]), forecast02)
+
+
+
+model03<- dynlm(diff(unemp1)~L(claims1, 0:3), data=data1)
+
+forecast03<- model03$coeff[1]+model03$coef[2]*lag(data2$Claims,0)+
+  model03$coef[3]*lag(data2$Claims,1)+
+  model03$coef[4]*lag(data2$Claims,2)
+
+error03<- rmse(diff(data2$Unempl[c(-1,-2)]), forecast03)
+```
+
+##### (2) p=1
+```{r}
+
+model11<- dynlm(diff(unemp1)~ L(diff(unemp1),1)+L(claims1, 0:1), data=data1)
+forecast11 <- model11$coef[1]+
+  model11$coef[2]*lag(diff(data2$Unempl),1)+
+  model11$coef[3]*lag(data2$Claims,0)
+error11 <- rmse(diff(data2$Unempl[c(-1)]), forecast11)
+
+model12<- dynlm(diff(Unempl)~ L(diff(Unempl),1)+L(Claims, 0:2), data=data1)
+forecast12 <- model12$coef[1]+
+  model12$coef[2]*lag(diff(data2$Unempl),1)+
+  model12$coef[3]*lag(data2$Claims,0)+
+  model12$coef[4]*lag(data2$Claims,1)
+error12 <- rmse(diff(data2$Unempl[c(-1,-2)]), forecast12)
+
+model13<- dynlm(diff(Unempl)~ L(diff(Unempl),1)+L(Claims, 0:3), data=data1)
+forecast13 <- model13$coef[1]+
+  model13$coef[2]*lag(diff(data2$Unempl),1)+model13$coef[3]*lag(data2$Claims,0)+
+  model13$coef[4]*lag(data2$Claims,1)+model13$coef[5]*lag(data2$Claims,2)
+
+error13 <- rmse(diff(data2$Unempl[c(-1,-2,-3)]), forecast13)
+
+```
+
+iv. Compute the RMSFE for the specifications you estimated above and choose the best model for out-of-sample forecasting.
+
+```{r}
+rmfse <- cbind(error01, error02, error03, error11, error12, error13)
+print(rmfse)
+```
+
+- model for ADL(0,1) is best, it has smallest rmfse, 
+
+v. Using the preferred model from the previous question, predict the change in the unemploy- ment rate in April 2020 and, using the March 2020 number, the level of unemployment in April 2020
+
+```{r}
+tail(data2$Claims,2)
+
+forecast <- model01$coef[1]+model01$coef[2]*(6867000-217000)
+unemploy <- tail(data2$Unempl,1)+forecast
+cat(unemploy)
+```
+

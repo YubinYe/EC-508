@@ -1,0 +1,284 @@
+508 ps2
+========================================================
+
+- Yubin Ye
+- U53651145
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
+library(foreign) 
+library(sandwich) 
+library(lmtest)
+library(pander)
+library(ggplot2)
+library(ggthemes)
+library(gridExtra)
+
+df<-read.dta('lawsch85.dta')
+hp<-read.dta('hprice1.dta')
+```
+
+### Problem 1: Suits
+
+The data set in lawsch85.dta contains information for 1985 cohort of the top 156 law schools in the US. Variables in the dataset include rank, law school ranking, salary, median starting salary, cost, law school cost.
+
+##### 1. Compute the average starting salary across law schools in the sample.
+
+```{r warning=FALSE}
+df<-subset(df,!is.na(df$salary))
+mean(df$salary)
+```
+##### Do you think it coincides with the average starting salary across law students? (Hint: think size)
+- not exactly, the sample size is small, the sample average might not consistent with population mean.
+
+##### 2. Regress starting salaries on the law school’s ranking: $$salaryi =β0 +β1 ×ranki +ui$$,compute standard errors and a 95% confidence interval for β1. Report your results.
+
+```{r warning=FALSE}
+lm1<-lm(df$salary~df$rank)
+coeftest(lm1, vcov. = vcovHC)
+se1 <-sqrt(vcovHC(lm1)[2,2]) 
+CI_1 <- lm1$coef[2] + 1.96*se1*c(-1,1)
+cat('standard errors is',round(se1,2),
+    '\n95% confidence interval is (',round(CI_1,2),')')
+```
+
+##### 3. What is the expected difference in starting salary between the 20th top law school with the 40th top law school? Construct a 95% confidence interval for the difference. Report your results.
+
+```{r}
+difs<-lm1$coefficients[2]*(20-40)
+
+CI <- difs+se1*20*1.96*c(-1,1)
+cat('The expected difference is (',round(CI,2),')')
+```
+
+##### 4.Now regress the cost of attending law school on the school’s ranking: $$costi =β0 +β1 ×ranki +ui$$, compute standard errors and a 95% confidence interval for β1. Report your results.
+
+```{r warning=FALSE}
+lm2<-lm(df$cost~df$rank)
+coeftest(lm2, vcov. = vcovHC)
+se2 <-sqrt(vcovHC(lm2)[2,2]) 
+CI_2 <- lm2$coef[2] + 1.96*se2*c(-1,1)
+cat('standard errors is',round(se2,2),
+    '\n95% confidence interval is (',round(CI_2,2),')')
+```
+
+##### 5. What is the expected difference in cost between the 20th top law school with the 40th top law school? Construct a 95% confidence interval for the difference. Report your results.
+
+```{r warning=FALSE}
+# mean difference of cost
+difc<-lm2$coefficients[2]*(20-40)
+CI <- difc+se2*20*1.96*c(-1,1)
+cat('The expected difference is (',round(CI,2),')')
+```
+
+##### 6.Given the results in ii-iii. and iv-v. discuss the relative benefits and costs of attending a more prestigious program.
+- Both coefficieni is negetive, which means higher rank (smaller number) coincide with higher starting salary and higher cost.
+- The coefficient of rank on salary is -206.7, which has larger absolute value than the coefficient on cost -38.76. It might indicate that higher rank have larger effect on starting salary.
+
+##### 7. Construct a plot with rank on the x-axis and cost on the y-axis. Plot rank against salary in the same manner and comment on LSA 1-3.
+
+```{r, fig.height=6, fig.width=6, warning=FALSE}
+p1<-ggplot(aes(x=rank,y=cost),
+           data=df)+
+  geom_point(color="darkred",size=1.5,alpha=0.6)+
+  stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(method='lm', formula= y~x)+
+  xlab('rank')+ylab('cost')+ylim(0,80000)+
+  ggtitle('Relationship of Law School`s Rank & Cost')
+
+p2<-ggplot(aes(x=rank,y=salary),
+           data=df)+
+  geom_point(color="salmon",size=1.5,alpha=0.6)+
+  stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(method='lm', formula= y~x)+
+  xlab('rank')+ylab('cost')+ylim(0,80000)+
+  ggtitle('Relationship of Law School`s Rank & Salary')
+
+grid.arrange(p1,p2)
+```
+
+##### Do you believe Least-Squares Assumptions (LSA) 1-3 in this setting? 
+- LSA #1: E(ui|Xi)=0
+- LSA #2: (Xi,Yi) are iid
+- LSA #3: Large outliers in X and/or Y are rare.
+
+> all assumptions are satisfied
+
+##### 8.Construct a plot with rank on the x-axis and log(salary) on the y-axis. Comment on LSA1-3.
+
+- all assumptions are satisfied
+
+```{r, fig.height=3, fig.width=6, warning=FALSE}
+ggplot(aes(x=rank,y=lsalary),
+           data=df)+
+  geom_point(color="salmon",size=1.5,alpha=0.6)+
+  stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(method='lm', formula= y~x)+
+  xlab('rank')+ylab('cost')+
+  ggtitle('Relationship of Law School`s Rank & Cost')
+```
+
+##### 9. Repeat ii. but this time regressing log(salary) on rank: log(salaryi) = β0 + β1 × ranki + ui,compute standard errors and a 95% confidence interval for β1.
+
+```{r warning=FALSE}
+lm3<-lm(df$lsalary~df$rank)
+coeftest(lm3, vcov. = vcovHC)
+se3 <-sqrt(vcovHC(lm3)[2,2]) 
+CI_3 <- lm3$coef[2] + 1.96*se3*c(-1,1)
+cat('standard errors is',round(se3,5),
+    '\n95% confidence interval is (',round(CI_3,4),')')
+```
+
+Remark: This is still a linear model as we saw in class, everything we have seen so far applies to this regression. The only difference is in the interpretation of β1, when x is a continuous regressor:β1 = dlog(yi)/dxi = dyi/yi.
+
+because d log(x) = dx/x. This means that 100 × β1 is (roughly) the percentage increase in y when x changes by one unit. Economists often look at log(salary) instead of salary to make statements in terms of `percentage increases/decreases`. Here x is discrete, so β1 is just the difference in log(salary) when we change rank by one unit.
+  
+  
+### Problem 2: Real Estate
+
+The data set hprice1.dta contains observations on the selling price, in thousands of dollars, and features of houses sold in a given area, including bdrms, the `number of bedrooms` and, sqrft, the `size of house in square feet`. For more details on the variables in the dataset, see hprice1.des.
+
+##### . Estimate the following regression model:$$pricei = β0 + β1sqrfti + β2bdrmsi + ui$$ 
+
+```{r warning=FALSE}
+lhp<-lm(hp$price~hp$sqrft+hp$bdrms)
+coeftest(lhp, vcov. = vcovHC)
+se_sq <-sqrt(vcovHC(lhp)[2,2]) 
+se_bd <-sqrt(vcovHC(lhp)[3,3])
+
+CI_sq <- lhp$coef[2] + 1.96*se_sq*c(-1,1)
+CI_bd <- lhp$coef[3] + 1.96*se_bd*c(-1,1)
+
+cat('se(size of house) is',round(se_sq,2),
+    '\nse(number of bedroom) is',round(se_bd,2),
+    '\n95% confidence interval of house size is (',round(CI_sq,2),')',
+    '\n95% confidence interval of bedroom number is (',round(CI_bd,2),')')
+
+```
+
+##### Report the estimated coefficients, standard errors.
+
+##### 2. What is the estimated increase in price for a house with one more bedroom, holding square footage constant? 
+
+```{r warning=FALSE}
+lhp$coefficients[3]
+```
+
+##### Compare this number to the average selling price and discuss the magnitude of this increase.
+
+```{r warning=FALSE}
+cat('increasing of one more bedroom coincides with',round(lhp$coefficients[3]/mean(hp$price),2),
+    'increasing of average price')
+```
+
+##### 3. Using a 95% confidence interval, determine `whether this increase statistically significant`? Explain why this result is, or is not, intuitive.
+
+- t-statistic = 1.5208 < 1.96, the coefficient is not significant.
+
+##### 4. What is the estimated increase in price for a house with an additional bedroom that is 140 square feet in size? Compare this to your answer in part (ii).
+
+```{r  warning=FALSE}
+lhp$coefficients[2]*140
+```
+
+- compare adding a bedroom, adding the comparable area of a house might have larger leverage to house`s price.
+
+##### 5. Is the effect of the size of house alone statistically significant? Explain why this result is, or is not, intuitive.
+
+- yes, the t-statistic is 6.0121 > 1.96.
+
+##### 6.The first house in the sample has 2,438 square feet and 4 bedrooms. Find the predicted selling price for this house from the OLS regression line.
+
+
+```{r warning=FALSE}
+pred_price<-lhp$coefficients[3]*4+lhp$coefficients[2]*2438-19.314996
+cat('The predicted price with 2,438 square feet and 4 bedrooms is',pred_price)
+```
+
+##### 7.The actual selling price of the first house in the sample was $300,000 (so price is 300 in the data). Find the residual for this house. 
+
+```{r warning=FALSE}
+ui<-300-pred_price
+cat('The residual is',round(ui,2))
+```
+
+##### Does it suggest that the buyer underpaid or overpaid for the house?
+
+```{r warning=FALSE}
+sqrt(nrow(hp))*ui/sd(hp$price)
+```
+
+- Z-statistic value |-4.98| > 1.96, it is significant underpaid.
+
+### Problem 3: Omitted Variables
+
+Consider the true population model:
+$$yi =β_{0} +β_{1}xi +β_{2}zi +ui (1)$$
+
+where ui has mean zero and is independent of both xi and zi. Some notation: $$var(xi) = σx^{2}, var(zi) = σz^{2}, cov(xi, zi) = σxz$$. (yi, xi, zi) are iid and have finite fourth moments. Assume xi and zi have mean zero.
+
+##### 1. Suppose an economist regresses yi on xi only, omitting zi. Should she/he be concerned about the validity of the Least-Squares Assumptions? Explain.
+
+- yes, LSA#1: E(ei|Xi)=0 (ei is the error term of y~x), is violated. Because in LSA#1, error term contains all other factors that could effect Yi, if Zi is omitted, the error term must contains Zi. Since cov(Xi,Zi)>0, then $$E[ei|Xi]=E[(β_{2}zi + ui)|Xi] = β_{2}E[zi|Xi] + E[ui|Xi] = β_{2}E[zi|Xi]\neq 0$$ 
+##### 2. He/she decides to proceed regardless of your previous answer and estimates the following model:$$yi = β0 + β1xi + ei, (2)$$ with ei as an error term in the regression formula. Note that $$ei = β_{2}zi + ui$$. Write down the OLS formula for β1 with only xi as a regressor. Substitute yi in this formula using (2). 
+
+$$\widehat{β}_{1} = β_{1} + \frac{1/n\sum_{i=1}^{n}(Xi-\bar{X})(Yi-\bar{Y})}{1/n\sum_{i=1}^{n}(Xi-\bar{X})^{2}} $$
+$$\bar{Y}=β_{0}+β_{1}\bar{X}+\bar{e} $$
+$$\widehat{β}_{1} = β_{1} + \frac{1/n\sum_{i=1}^{n}(Xi-\bar{X})(ei-\bar{e})}{1/n\sum_{i=1}^{n}(Xi-\bar{X})^{2}} $$
+
+$$\widehat{β}_{1} = β_{1} + \frac{1/n\sum_{i=1}^{n}(Xi-\bar{X})(ei)}{1/n\sum_{i=1}^{n}(Xi-\bar{X})^{2}} $$
+
+##### 3. Express the probability limit of β1^ − β1 using the law of large numbers. The limit depends on the following terms: σx2,σx,z and β2. This is the so-called omitted variable bias.
+
+$$  \widehat{β}_{1} \xrightarrow[n\to\infty]{P} β_{1}+\frac{cov(Xi,ei)}{\sigma_{X}^{2}} $$
+$$ei = β_{2}Zi + ui$$
+$$  \widehat{β}_{1} = β_{1}+\frac{cov(Xi,β_{2}Zi + ui)}{\sigma_{X}^{2}} $$
+$$  \widehat{β}_{1} = β_{1}+\frac{β_{2}cov(Xi,Zi) + cov(Xi,ui)}{\sigma_{X}^{2}} $$
+
+$$  cov(Xi,ui) \xrightarrow[n\to\infty]{P} 0$$ 
+
+$$  \widehat{β}_{1} \xrightarrow[n\to\infty]{P} β_{1}+\frac{β_{2}cov(Xi,Zi)}{\sigma_{X}^{2}} $$
+$$  \widehat{β}_{1} - β_{1}\xrightarrow[n\to\infty]{P} β_{2}\frac{\sigma_{XZ}}{\sigma_{X}^{2}} $$
+
+
+##### 4. Suppose the economist finds a positive effect: β1 > 0. You know that σxz > 0 and β2 < 0.
+What can you tell him/her about the true β1 using this information?
+$$ β_{2}\frac{\sigma_{XZ}}{\sigma_{X}^{2}} < 0 $$ 
+$$\widehat{β}_{1} - β_{1} \xrightarrow[n\to\infty]{P}β_{2}\frac{\sigma_{XZ}}{\sigma_{X}^{2}} < 0 $$
+- True β1 is bigger than β1_hat
+
+##### 5. You will now conduct a numerical experiment to see the effect of omitted variable bias on
+the coefficients. To fix the random numbers, so that everyone gets the same sequence type, set.seed(123) at the beginning of your R code.Then use nrow, set n=1000, draw ui ∼ N(0,1) , xi ∼ N(0,1) and zi = xi +vi, vi ∼ N(0,1) for i = 1,...,n. This implies that: σx2 = 1, σxz = 1. Now generate: $$yi = 0 + xi − zi + ui$$
+
+```{r warning=FALSE}
+set.seed(123)
+ui <- rnorm(1000,0,1)
+xi <- rnorm(1000,0,1)
+vi <- rnorm(1000,0,1)
+zi=xi+vi
+
+yi = 0 + xi-zi + ui
+```
+
+##### With the lm function, compute the OLS estimates when regressing yi only on xi. Use coeftest to test for H0 : β1 = 0 using the single regressor specification.
+
+```{r warning=FALSE}
+lm_yx<-lm(yi~xi)
+coeftest(lm_yx)
+```
+
+##### 6. Explain your result above in light of your earlier findings. To do this, you should compute the omitted variable bias using the formula you derived in iii.
+
+```{r warning=FALSE}
+lm_y<-lm(yi~xi+zi)
+coeftest(lm_y)
+```
+
+```{r warning=FALSE}
+lm_zx<-lm(zi~xi)
+
+b_hat<-lm_yx$coefficients[2]
+
+bias<-lm_y$coefficients[3]*lm_zx$coefficients[2]
+
+bias
+```
